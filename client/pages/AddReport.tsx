@@ -133,9 +133,9 @@ export default function AddReport() {
         .filter(Boolean)
         .join(" - ");
 
-      const reportId = crypto.randomUUID();
+      const localId = crypto.randomUUID();
       const reportData = {
-        id: reportId,
+        localId,
         title: formData.title.trim(),
         location: formData.location,
         date: formData.date,
@@ -153,13 +153,17 @@ export default function AddReport() {
         recommendations: formData.recommendations,
       };
 
-      const response = await fetch("/api/save-report", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(reportData),
+      await offlineStorage.saveReport({
+        localId,
+        title: reportData.title,
+        content: JSON.stringify(reportData),
+        date: formData.date,
+        syncStatus: "pending",
       });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || "تعذر حفظ التقرير");
+
+      syncManager.syncAll().catch((err) =>
+        console.warn("Sync immédiate impossible, réessai automatique plus tard:", err)
+      );
 
       toast({
         title: "تم بنجاح",
@@ -168,7 +172,7 @@ export default function AddReport() {
       navigate("/report-success", {
         state: {
           report: {
-            ...(result.report || reportData),
+            ...reportData,
             description: formData.description,
             evaluationPositive: formData.evaluationPositive,
             evaluationNegative: formData.evaluationNegative,
