@@ -4,6 +4,8 @@ import Layout from "@/components/Layout";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { X, Upload, Image as ImageIcon } from "lucide-react";
+import { offlineStorage } from "@/lib/storage/offlineStorage";
+import { syncManager } from "@/lib/sync/syncManager";
 
 const CATEGORIES = [
   { id: "ashbal_zahrat", label: "أشبال و زهرات" },
