@@ -2,7 +2,8 @@ import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import Layout from "@/components/Layout";
 import { useToast } from "@/hooks/use-toast";
-import { X, Upload, CheckCircle2 } from "lucide-react";
+import { offlineStorage } from "@/lib/storage/offlineStorage";
+import { syncManager } from "@/lib/sync/syncManager";
 
 export default function AddSession() {
   const navigate = useNavigate();
@@ -64,25 +65,27 @@ export default function AddSession() {
     setIsSubmitting(true);
 
     try {
-      const payload = formData;
+      const localId = crypto.randomUUID();
 
-      const response = await fetch("/api/generate-session", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
+      await offlineStorage.saveSession({
+        localId,
+        title: formData.title.trim(),
+        description: JSON.stringify(formData),
+        date: formData.dateTime,
+        participants: [],
+        syncStatus: "pending",
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "خطأ في حفظ الحصة");
-      }
+      syncManager.syncAll().catch((err) =>
+        console.warn("Sync immédiate impossible, réessai automatique plus tard:", err)
+      );
 
       toast({
         title: "تم بنجاح",
         description: "تم حفظ الحصة بنجاح.",
       });
+
+      navigate("/reports");
 
       navigate("/reports");
     } catch (error: any) {
