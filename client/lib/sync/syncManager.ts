@@ -6,7 +6,7 @@
  * - Queue de sync fiable
  *
  * IMPORTANT: les payloads envoyés à Supabase utilisent les VRAIS noms
- * de colonnes des tables `reports` et `sessions`.
+ * de colonnes des tables `reports` et `sessions` (voir schema_export.sql).
  * Le contenu complet du formulaire est stocké en JSON dans le champ
  * `content` d'offlineStorage, puis désérialisé ici avant l'envoi.
  */
@@ -37,10 +37,19 @@ function describeError(error: unknown): string {
 // colonne timestamptz. Passe telle quelle toute valeur déjà complète.
 function normalizeDateTime(value: unknown): string | null {
   if (!value || typeof value !== 'string') return null;
-  if (/Z$|[+-]\d{2}:\d{2}$/.test(value)) return value;
+  if (/Z$|[+-]\d{2}:\d{2}$/.test(value)) return value; // déjà avec timezone
   if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) return `${value}:00.000Z`;
   if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(value)) return `${value}.000Z`;
   return value;
+}
+
+// Extrait la partie "YYYY-MM-DD" d'une valeur datetime-local ou ISO,
+// pour la colonne `date` (type `date`, NOT NULL) distincte de
+// `date_time` (timestamptz) dans la table sessions.
+function extractDatePart(value: unknown): string | null {
+  if (!value || typeof value !== 'string') return null;
+  const match = value.match(/^\d{4}-\d{2}-\d{2}/);
+  return match ? match[0] : null;
 }
 
 class SyncManager {
@@ -198,6 +207,10 @@ class SyncManager {
         local_id: session.localId,
         title: session.title,
         date_time: session.date,
+        // `date` est NOT NULL dans la table sessions (type `date`,
+        // distinct de `date_time`) : on la dérive systématiquement,
+        // avec un repli sur aujourd'hui si aucune date exploitable.
+        date: extractDatePart(session.date) || new Date().toISOString().slice(0, 10),
         created_at: session.createdAt,
         location: null,
         target_audience: null,
@@ -206,6 +219,9 @@ class SyncManager {
         methodology_reformulated: null,
       };
 
+      // Le détail complet du formulaire (location, target_audience,
+      // objective, methodology...) est sérialisé en JSON dans
+      // `description` par AddSession.tsx pour ne rien perdre offline.
       try {
         const form = JSON.parse(session.description || '{}');
         payload.location = form.location ?? null;
@@ -213,8 +229,12 @@ class SyncManager {
         payload.objective = form.objective ?? null;
         payload.methodology_original = form.methodology ?? null;
         payload.methodology_reformulated = form.methodology ?? null;
+        // datetime-local donne "2026-08-21T17:20" (sans secondes ni
+        // timezone) — pas un ISO 8601 complet. On le complète pour
+        // que la colonne timestamptz l'accepte de façon fiable.
         const rawDateTime = form.dateTime ?? session.date;
         payload.date_time = normalizeDateTime(rawDateTime);
+        payload.date = extractDatePart(rawDateTime) || (payload.date as string);
       } catch {
         // description n'était pas du JSON valide, on garde les valeurs par défaut
       }
