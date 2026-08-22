@@ -85,7 +85,7 @@ export default function ReportSuccess() {
     const fileName = `${crypto.randomUUID()}.pdf`;
 
     const { error: uploadError } = await supabase.storage
-      .from("report-pdfs")
+      .from("reports-pdfs")
       .upload(fileName, blob, { contentType: "application/pdf", upsert: false });
 
     if (uploadError) {
