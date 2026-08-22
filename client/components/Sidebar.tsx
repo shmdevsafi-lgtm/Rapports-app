@@ -7,9 +7,6 @@ import {
   FilePlus2,
   CalendarPlus,
   HardDriveDownload,
-  ListChecks,
-  Lightbulb,
-  UserCircle,
   LogOut,
 } from "lucide-react";
 
@@ -24,15 +21,13 @@ const NAV_ITEMS = [
   { to: "/add-report", label: "إضافة تقرير", icon: FilePlus2 },
   { to: "/add-session", label: "إضافة حصة", icon: CalendarPlus },
   { to: "/sync-cache", label: "المخزن المحلي", icon: HardDriveDownload },
-  { to: "/program", label: "البرنامج", icon: ListChecks },
-  { to: "/ideas", label: "الأفكار والمقترحات", icon: Lightbulb },
-  { to: "/account", label: "الحساب", icon: UserCircle },
 ];
 
 export default function Sidebar({ open, onClose }: SidebarProps) {
   const location = useLocation();
   const navigate = useNavigate();
 
+  // Ferme automatiquement le menu à chaque changement de page.
   useEffect(() => {
     onClose();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -46,6 +41,7 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
 
   return (
     <>
+      {/* Overlay sombre derrière le menu, ferme au clic */}
       <div
         onClick={onClose}
         className={`fixed inset-0 z-40 bg-black/40 transition-opacity duration-300 ${
@@ -53,6 +49,7 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
         }`}
       />
 
+      {/* Panneau latéral (RTL : s'ouvre depuis la droite) */}
       <aside
         dir="rtl"
         className={`fixed top-0 right-0 z-50 h-full w-80 max-w-[85vw] bg-white shadow-2xl transition-transform duration-300 flex flex-col ${
