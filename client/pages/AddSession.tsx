@@ -2,6 +2,7 @@ import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import Layout from "@/components/Layout";
 import { useToast } from "@/hooks/use-toast";
+import { X, Upload, CheckCircle2 } from "lucide-react";
 import { offlineStorage } from "@/lib/storage/offlineStorage";
 import { syncManager } from "@/lib/sync/syncManager";
 
@@ -86,8 +87,6 @@ export default function AddSession() {
       });
 
       navigate("/reports");
-
-      navigate("/reports");
     } catch (error: any) {
       console.error(error);
       toast({
@@ -115,7 +114,6 @@ export default function AddSession() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-8">
-            {/* Logos Section */}
             <div className="space-y-4 p-6 bg-gray-50/50 rounded-3xl border border-gray-100">
               <label className="block text-xs font-black text-gray-500 uppercase tracking-widest mr-1 mb-4">
                 تحميل الشعارات (3 كحد أقصى)
