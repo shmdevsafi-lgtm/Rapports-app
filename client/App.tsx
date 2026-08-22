@@ -20,6 +20,7 @@ import Reports from "./pages/Reports";
 import AddReport from "./pages/AddReport";
 import ReportSuccess from "./pages/ReportSuccess";
 import AddSession from "./pages/AddSession";
+import SyncCache from "./pages/SyncCache";
 import Program from "./pages/Program";
 import Ideas from "./pages/Ideas";
 import Account from "./pages/Account";
@@ -29,10 +30,6 @@ const queryClient = new QueryClient();
 
 const App = () => {
   useEffect(() => {
-    // Initialise la base locale (IndexedDB) et le gestionnaire de
-    // synchronisation une seule fois, au démarrage de l'app.
-    // Sans ça, offlineStorage.saveReport()/saveSession() échouent
-    // avec "database not initialised".
     let cancelled = false;
     (async () => {
       await offlineStorage.init();
@@ -65,6 +62,7 @@ const App = () => {
               <Route path="/add-report" element={<ProtectedRoute><AddReport /></ProtectedRoute>} />
               <Route path="/report-success" element={<ProtectedRoute><ReportSuccess /></ProtectedRoute>} />
               <Route path="/add-session" element={<ProtectedRoute><AddSession /></ProtectedRoute>} />
+              <Route path="/sync-cache" element={<ProtectedRoute><SyncCache /></ProtectedRoute>} />
               <Route path="/program" element={<ProtectedRoute><Program /></ProtectedRoute>} />
               <Route path="/ideas" element={<ProtectedRoute><Ideas /></ProtectedRoute>} />
               <Route path="/account" element={<ProtectedRoute><Account /></ProtectedRoute>} />
