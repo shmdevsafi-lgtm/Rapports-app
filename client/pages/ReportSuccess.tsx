@@ -4,7 +4,7 @@ import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import Layout from "@/components/Layout";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, CheckCircle2, Download, Home } from "lucide-react";
+import { ArrowRight, CheckCircle2, Download, Home, ExternalLink } from "lucide-react";
 
 type Logo = string;
 
@@ -25,14 +25,14 @@ export default function ReportSuccess() {
   const navigate = useNavigate();
   const reportRef = useRef<HTMLDivElement>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
   const state = (location.state as ReportState) || {};
   const report = state.report || {};
   const title = state.title || valueOf(report, "title");
   const logos = state.logos || [];
 
-  const downloadPdf = async () => {
-    if (!reportRef.current) return;
-    setIsExporting(true);
+  const generatePdfBlob = async (): Promise<string | null> => {
+    if (!reportRef.current) return null;
     const reportElement = reportRef.current;
     const originalWidth = reportElement.style.width;
     const originalTransform = reportElement.style.transform;
@@ -52,11 +52,33 @@ export default function ReportSuccess() {
       });
       const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
       pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, 0, 210, 297, undefined, "FAST");
-      pdf.save(`${title.replace(/\s+/g, "-") || "rapport"}.pdf`);
+
+      // Blob + URL locale : fonctionne de façon fiable même dans la
+      // WebView Android (contrairement à pdf.save() qui déclenche un
+      // téléchargement natif souvent silencieusement bloqué dans l'APK).
+      const blob = pdf.output("blob");
+      const url = URL.createObjectURL(blob);
+      return url;
     } finally {
       reportElement.style.width = originalWidth;
       reportElement.style.transform = originalTransform;
       reportElement.style.transformOrigin = originalTransformOrigin;
+    }
+  };
+
+  const downloadPdf = async () => {
+    setIsExporting(true);
+    try {
+      const url = pdfBlobUrl || (await generatePdfBlob());
+      if (!url) return;
+      if (!pdfBlobUrl) setPdfBlobUrl(url);
+
+      // Ouvre le PDF dans le navigateur (nouvel onglet sur le web,
+      // navigateur système via Capacitor dans l'APK) au lieu de
+      // forcer un téléchargement natif qui échoue silencieusement
+      // dans la WebView Android.
+      window.open(url, "_blank", "noopener,noreferrer");
+    } finally {
       setIsExporting(false);
     }
   };
@@ -74,10 +96,22 @@ export default function ReportSuccess() {
               <h1 className="text-2xl font-black text-slate-900">{title}</h1>
             </div>
           </div>
-          <Button onClick={downloadPdf} disabled={isExporting} className="gap-2 rounded-xl px-6 py-6 font-black">
-            <Download size={18} />
-            {isExporting ? "جاري تجهيز PDF..." : "تحميل PDF"}
-          </Button>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <Button onClick={downloadPdf} disabled={isExporting} className="gap-2 rounded-xl px-6 py-6 font-black">
+              <Download size={18} />
+              {isExporting ? "جاري تجهيز PDF..." : "تحميل PDF"}
+            </Button>
+            {pdfBlobUrl && (
+              <Button
+                onClick={() => window.open(pdfBlobUrl, "_blank", "noopener,noreferrer")}
+                variant="outline"
+                className="gap-2 rounded-xl px-6 py-6 font-black"
+              >
+                <ExternalLink size={18} />
+                فتح في المتصفح
+              </Button>
+            )}
+          </div>
         </div>
 
         <div ref={reportRef} dir="rtl" className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white p-4 shadow-xl sm:p-8">
