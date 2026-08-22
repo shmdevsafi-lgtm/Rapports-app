@@ -5,6 +5,7 @@ import jsPDF from "jspdf";
 import Layout from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, CheckCircle2, Download, Home, ExternalLink } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 
 type Logo = string;
 
@@ -13,6 +14,7 @@ type ReportState = {
   title?: string;
   logos?: Logo[];
   report?: Record<string, unknown>;
+  supabaseId?: string;
 };
 
 const valueOf = (report: Record<string, unknown> | undefined, key: string, fallback = "غير محدد") => {
@@ -20,64 +22,128 @@ const valueOf = (report: Record<string, unknown> | undefined, key: string, fallb
   return value === undefined || value === null || value === "" ? fallback : String(value);
 };
 
+async function openExternal(url: string) {
+  try {
+    const { Capacitor } = await import("@capacitor/core");
+    if (Capacitor.isNativePlatform()) {
+      const { Browser } = await import("@capacitor/browser");
+      await Browser.open({ url });
+      return;
+    }
+  } catch {
+    // @capacitor/browser indisponible (ex: web pur) → fallback ci-dessous
+  }
+  window.open(url, "_blank", "noopener,noreferrer");
+}
+
 export default function ReportSuccess() {
   const location = useLocation();
   const navigate = useNavigate();
   const reportRef = useRef<HTMLDivElement>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
+  const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "done" | "error">("idle");
+  const [debugError, setDebugError] = useState<string | null>(null);
   const state = (location.state as ReportState) || {};
   const report = state.report || {};
   const title = state.title || valueOf(report, "title");
   const logos = state.logos || [];
 
-  const generatePdfBlob = async (): Promise<string | null> => {
+  const generatePdfBlob = async (): Promise<Blob | null> => {
     if (!reportRef.current) return null;
-    const reportElement = reportRef.current;
-    const originalWidth = reportElement.style.width;
-    const originalTransform = reportElement.style.transform;
-    const originalTransformOrigin = reportElement.style.transformOrigin;
 
-    try {
-      reportElement.style.width = "794px";
-      reportElement.style.transform = "scale(0.75)";
-      reportElement.style.transformOrigin = "top left";
-      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const canvas = await html2canvas(reportRef.current, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: "#ffffff",
+      logging: false,
+    });
 
-      const canvas = await html2canvas(reportElement, {
-        scale: 1.5,
-        useCORS: true,
-        backgroundColor: "#ffffff",
-        windowWidth: 794,
-      });
-      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-      pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, 0, 210, 297, undefined, "FAST");
+    const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const imgWidth = pageWidth;
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
 
-      // Blob + URL locale : fonctionne de façon fiable même dans la
-      // WebView Android (contrairement à pdf.save() qui déclenche un
-      // téléchargement natif souvent silencieusement bloqué dans l'APK).
-      const blob = pdf.output("blob");
-      const url = URL.createObjectURL(blob);
-      return url;
-    } finally {
-      reportElement.style.width = originalWidth;
-      reportElement.style.transform = originalTransform;
-      reportElement.style.transformOrigin = originalTransformOrigin;
+    const imgData = canvas.toDataURL("image/jpeg", 0.92);
+
+    if (imgHeight <= pageHeight) {
+      pdf.addImage(imgData, "JPEG", 0, 0, imgWidth, imgHeight);
+    } else {
+      let heightLeft = imgHeight;
+      let position = 0;
+      pdf.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
     }
+
+    return pdf.output("blob");
+  };
+
+  const uploadPdfToSupabase = async (blob: Blob): Promise<string | null> => {
+    const fileName = `${crypto.randomUUID()}.pdf`;
+    const { error: uploadError } = await supabase.storage
+      .from("report-pdfs")
+      .upload(fileName, blob, { contentType: "application/pdf", upsert: false });
+
+    if (uploadError) {
+      throw new Error(`Échec upload Storage: ${uploadError.message}`);
+    }
+
+    const { data: publicUrlData } = supabase.storage.from("report-pdfs").getPublicUrl(fileName);
+    const publicUrl = publicUrlData?.publicUrl || null;
+
+    const reportId = (state as any).supabaseId as string | undefined;
+    const localId = (report as any).localId as string | undefined;
+
+    if (publicUrl) {
+      if (reportId) {
+        await supabase.from("reports").update({ pdf_url: publicUrl }).eq("id", reportId);
+      } else if (localId) {
+        await supabase.from("reports").update({ pdf_url: publicUrl }).eq("local_id", localId);
+      }
+    }
+
+    return publicUrl;
   };
 
   const downloadPdf = async () => {
     setIsExporting(true);
+    setDebugError(null);
     try {
-      const url = pdfBlobUrl || (await generatePdfBlob());
-      if (!url) return;
-      if (!pdfBlobUrl) setPdfBlobUrl(url);
+      let url = pdfBlobUrl;
+      let blob: Blob | null = null;
 
-      // Ouvre le PDF dans le navigateur (nouvel onglet sur le web,
-      // navigateur système via Capacitor dans l'APK) au lieu de
-      // forcer un téléchargement natif qui échoue silencieusement
-      // dans la WebView Android.
-      window.open(url, "_blank", "noopener,noreferrer");
+      if (!url) {
+        blob = await generatePdfBlob();
+        if (!blob) {
+          setDebugError("Impossible de capturer le contenu du rapport.");
+          return;
+        }
+        url = URL.createObjectURL(blob);
+        setPdfBlobUrl(url);
+      }
+
+      await openExternal(url);
+
+      if (blob && uploadStatus === "idle") {
+        setUploadStatus("uploading");
+        uploadPdfToSupabase(blob)
+          .then(() => setUploadStatus("done"))
+          .catch((err) => {
+            console.error("Upload PDF échoué:", err);
+            setUploadStatus("error");
+          });
+      }
+    } catch (error: any) {
+      console.error("Erreur génération PDF:", error);
+      setDebugError(error?.message || String(error));
     } finally {
       setIsExporting(false);
     }
@@ -94,16 +160,25 @@ export default function ReportSuccess() {
             <div>
               <p className="text-sm font-bold text-[#8b1e3f]">تم حفظ التقرير بنجاح</p>
               <h1 className="text-2xl font-black text-slate-900">{title}</h1>
+              {uploadStatus === "uploading" && (
+                <p className="text-xs font-bold text-amber-600">جاري رفع PDF إلى الخادم...</p>
+              )}
+              {uploadStatus === "done" && (
+                <p className="text-xs font-bold text-emerald-600">تم حفظ رابط PDF بنجاح ✓</p>
+              )}
+              {uploadStatus === "error" && (
+                <p className="text-xs font-bold text-red-600">تعذر رفع PDF إلى الخادم (يبقى متاحاً محلياً)</p>
+              )}
             </div>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row">
             <Button onClick={downloadPdf} disabled={isExporting} className="gap-2 rounded-xl px-6 py-6 font-black">
               <Download size={18} />
-              {isExporting ? "جاري تجهيز PDF..." : "تحميل PDF"}
+              {isExporting ? "جاري تجهيز PDF..." : pdfBlobUrl ? "فتح PDF" : "تحميل PDF"}
             </Button>
             {pdfBlobUrl && (
               <Button
-                onClick={() => window.open(pdfBlobUrl, "_blank", "noopener,noreferrer")}
+                onClick={() => openExternal(pdfBlobUrl)}
                 variant="outline"
                 className="gap-2 rounded-xl px-6 py-6 font-black"
               >
@@ -113,6 +188,13 @@ export default function ReportSuccess() {
             )}
           </div>
         </div>
+
+        {debugError && (
+          <div className="rounded-2xl border-2 border-red-200 bg-red-50 p-6 text-right" dir="ltr">
+            <p className="mb-2 font-black text-red-700">DEBUG ERROR:</p>
+            <p className="break-all font-mono text-xs text-red-600">{debugError}</p>
+          </div>
+        )}
 
         <div ref={reportRef} dir="rtl" className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white p-4 shadow-xl sm:p-8">
           <article className="mx-auto max-w-4xl overflow-hidden bg-white" style={{ pageBreakInside: "avoid" }}>
