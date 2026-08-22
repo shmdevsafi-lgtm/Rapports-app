@@ -14,6 +14,35 @@
 import { supabase } from '../supabase';
 import { offlineStorage, StoredReport, StoredSession } from '../storage/offlineStorage';
 
+// Extrait un message lisible d'une erreur Supabase (objet PostgREST
+// avec .message/.details/.hint) ou d'une Error classique. String(err)
+// sur un objet donne littéralement "[object Object]" — à éviter.
+function describeError(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === 'object') {
+    const e = error as Record<string, unknown>;
+    const parts = [e.message, e.details, e.hint, e.code].filter(Boolean);
+    if (parts.length > 0) return parts.join(' | ');
+    try {
+      return JSON.stringify(error);
+    } catch {
+      return 'Erreur inconnue (objet non sérialisable)';
+    }
+  }
+  return String(error);
+}
+
+// Convertit une valeur de <input type="datetime-local"> ("2026-08-21T17:20",
+// sans secondes ni timezone) en ISO 8601 complet accepté par une
+// colonne timestamptz. Passe telle quelle toute valeur déjà complète.
+function normalizeDateTime(value: unknown): string | null {
+  if (!value || typeof value !== 'string') return null;
+  if (/Z$|[+-]\d{2}:\d{2}$/.test(value)) return value;
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) return `${value}:00.000Z`;
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(value)) return `${value}.000Z`;
+  return value;
+}
+
 class SyncManager {
   private isSyncing = false;
   private syncInterval: NodeJS.Timeout | null = null;
@@ -145,7 +174,7 @@ class SyncManager {
       await offlineStorage.updateReportSyncStatus(report.id, 'synced', supabaseId);
       console.log(`✅ Report synced: ${supabaseId}`);
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
+      const errorMsg = describeError(error);
       console.error(`❌ Report sync failed: ${errorMsg}`);
       await offlineStorage.updateReportSyncStatus(report.id, 'failed', undefined, errorMsg);
     }
@@ -184,7 +213,8 @@ class SyncManager {
         payload.objective = form.objective ?? null;
         payload.methodology_original = form.methodology ?? null;
         payload.methodology_reformulated = form.methodology ?? null;
-        payload.date_time = form.dateTime ?? session.date;
+        const rawDateTime = form.dateTime ?? session.date;
+        payload.date_time = normalizeDateTime(rawDateTime);
       } catch {
         // description n'était pas du JSON valide, on garde les valeurs par défaut
       }
@@ -228,7 +258,7 @@ class SyncManager {
       await offlineStorage.updateSessionSyncStatus(session.id, 'synced', supabaseId);
       console.log(`✅ Session synced: ${supabaseId}`);
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
+      const errorMsg = describeError(error);
       console.error(`❌ Session sync failed: ${errorMsg}`);
       await offlineStorage.updateSessionSyncStatus(session.id, 'failed', undefined, errorMsg);
     }
