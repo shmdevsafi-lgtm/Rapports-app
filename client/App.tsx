@@ -1,5 +1,6 @@
 import "./global.css";
 
+import { useEffect } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { createRoot } from "react-dom/client";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -8,6 +9,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import { offlineStorage } from "@/lib/storage/offlineStorage";
+import { syncManager } from "@/lib/sync/syncManager";
 
 import Index from "./pages/Index";
 import Login from "./pages/Login";
@@ -24,36 +27,56 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <AuthProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <Routes>
-            {/* Public Routes */}
-            <Route path="/" element={<Index />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            
-            {/* Protected Routes */}
-            <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-            <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
-            <Route path="/add-report" element={<ProtectedRoute><AddReport /></ProtectedRoute>} />
-            <Route path="/report-success" element={<ProtectedRoute><ReportSuccess /></ProtectedRoute>} />
-            <Route path="/add-session" element={<ProtectedRoute><AddSession /></ProtectedRoute>} />
-            <Route path="/program" element={<ProtectedRoute><Program /></ProtectedRoute>} />
-            <Route path="/ideas" element={<ProtectedRoute><Ideas /></ProtectedRoute>} />
-            <Route path="/account" element={<ProtectedRoute><Account /></ProtectedRoute>} />
-            
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-      </TooltipProvider>
-    </AuthProvider>
-  </QueryClientProvider>
-);
+const App = () => {
+  useEffect(() => {
+    // Initialise la base locale (IndexedDB) et le gestionnaire de
+    // synchronisation une seule fois, au démarrage de l'app.
+    // Sans ça, offlineStorage.saveReport()/saveSession() échouent
+    // avec "database not initialised".
+    let cancelled = false;
+    (async () => {
+      await offlineStorage.init();
+      if (!cancelled) {
+        await syncManager.init();
+      }
+    })();
+    return () => {
+      cancelled = true;
+      syncManager.destroy();
+    };
+  }, []);
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <Routes>
+              {/* Public Routes */}
+              <Route path="/" element={<Index />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
+
+              {/* Protected Routes */}
+              <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+              <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+              <Route path="/add-report" element={<ProtectedRoute><AddReport /></ProtectedRoute>} />
+              <Route path="/report-success" element={<ProtectedRoute><ReportSuccess /></ProtectedRoute>} />
+              <Route path="/add-session" element={<ProtectedRoute><AddSession /></ProtectedRoute>} />
+              <Route path="/program" element={<ProtectedRoute><Program /></ProtectedRoute>} />
+              <Route path="/ideas" element={<ProtectedRoute><Ideas /></ProtectedRoute>} />
+              <Route path="/account" element={<ProtectedRoute><Account /></ProtectedRoute>} />
+
+              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </BrowserRouter>
+        </TooltipProvider>
+      </AuthProvider>
+    </QueryClientProvider>
+  );
+};
 
 createRoot(document.getElementById("root")!).render(<App />);
