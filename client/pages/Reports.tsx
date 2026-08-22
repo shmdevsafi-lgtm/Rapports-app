@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import Layout from "@/components/Layout";
+import { supabase } from "@/lib/supabase";
 
 interface Report {
   id: string;
@@ -25,21 +26,46 @@ export default function Reports() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"reports" | "sessions">("reports");
+  const [debugError, setDebugError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
+      setDebugError(null);
       try {
-        const response = await fetch("/api/reports");
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.error || "تعذر تحميل التقارير");
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-        setReports(result.reports || []);
-        setSessions(result.sessions || []);
+        if (!supabaseUrl || !supabaseKey) {
+          setDebugError(
+            `Variables manquantes: URL=${supabaseUrl ? "OK" : "VIDE"}, KEY=${supabaseKey ? "OK" : "VIDE"}`
+          );
+          setLoading(false);
+          return;
+        }
+
+        // Requêtes directes à Supabase (clé anon) au lieu de passer
+        // par un serveur Express, qui n'existe pas dans l'APK.
+        const [reportsResult, sessionsResult] = await Promise.all([
+          supabase.from("reports").select("*").order("created_at", { ascending: false }),
+          supabase.from("sessions").select("*").order("created_at", { ascending: false }),
+        ]);
+
+        if (reportsResult.error) {
+          setDebugError(`Erreur reports: ${JSON.stringify(reportsResult.error)}`);
+          throw reportsResult.error;
+        }
+        if (sessionsResult.error) {
+          setDebugError(`Erreur sessions: ${JSON.stringify(sessionsResult.error)}`);
+          throw sessionsResult.error;
+        }
+
+        setReports(reportsResult.data || []);
+        setSessions(sessionsResult.data || []);
       } catch (error: any) {
         console.error("Error fetching data:", error);
         const message = error?.message || (typeof error === "string" ? error : JSON.stringify(error));
-        console.error("Reports listing details:", message);
+        setDebugError((prev) => prev || `Exception: ${message}`);
       } finally {
         setLoading(false);
       }
@@ -83,6 +109,11 @@ export default function Reports() {
       {loading ? (
         <div className="flex justify-center py-24">
           <div className="animate-spin rounded-full h-14 w-14 border-b-4 border-primary"></div>
+        </div>
+      ) : debugError ? (
+        <div className="bg-red-50 border-2 border-red-200 rounded-2xl p-6 text-right" dir="ltr">
+          <p className="font-black text-red-700 mb-2">DEBUG ERROR:</p>
+          <p className="text-xs text-red-600 break-all font-mono">{debugError}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 animate-in zoom-in-95 duration-700">
