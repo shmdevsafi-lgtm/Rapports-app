@@ -1,23 +1,21 @@
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
+import { Menu } from "lucide-react";
 
-export default function Header() {
-  const navigate = useNavigate();
+interface HeaderProps {
+  onMenuClick: () => void;
+}
 
-  const handleLogout = () => {
-    localStorage.removeItem("isLoggedIn");
-    navigate("/login");
-  };
-
+export default function Header({ onMenuClick }: HeaderProps) {
   const isLoggedIn = localStorage.getItem("isLoggedIn") === "true";
 
   return (
-    <header className="bg-white border-b border-gray-100 px-6 py-4 sticky top-0 z-50 shadow-sm">
+    <header className="bg-white border-b border-gray-100 px-6 py-4 sticky top-0 z-30 shadow-sm">
       <div className="max-w-6xl mx-auto flex items-center justify-between">
         <Link to="/" className="flex items-center gap-4 group">
           <div className="w-12 h-12 relative overflow-hidden rounded-full border-2 border-primary/10 p-1 group-hover:scale-110 transition-transform duration-300">
-            <img 
-              src="https://cdn.builder.io/api/v1/image/assets%2Fd8cf247061ae4e73b8c8529275e40675%2F1e55c030693d429b8a71a3a705492b5e?format=webp&width=800&height=1200" 
-              alt="Logo SHM" 
+            <img
+              src="https://cdn.builder.io/api/v1/image/assets%2Fd8cf247061ae4e73b8c8529275e40675%2F1e55c030693d429b8a71a3a705492b5e?format=webp&width=800&height=1200"
+              alt="Logo SHM"
               className="w-full h-full object-contain"
             />
           </div>
@@ -33,10 +31,11 @@ export default function Header() {
 
         {isLoggedIn ? (
           <button
-            onClick={handleLogout}
-            className="px-4 py-2 text-sm font-bold text-white shm-gradient rounded-full shadow-sm hover:shadow-md transition-all shm-gradient-hover"
+            onClick={onMenuClick}
+            className="p-3 rounded-full text-gray-500 border border-gray-200 hover:border-primary/30 hover:text-primary transition-all"
+            aria-label="فتح القائمة"
           >
-            تسجيل الخروج
+            <Menu size={20} />
           </button>
         ) : (
           <Link
