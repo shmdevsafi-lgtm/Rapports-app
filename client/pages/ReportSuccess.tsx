@@ -54,6 +54,8 @@ export default function ReportSuccess() {
       allowTaint: true,
       backgroundColor: "#ffffff",
       logging: false,
+      windowWidth: 794,
+      width: reportRef.current.scrollWidth < 794 ? undefined : 794,
     });
 
     const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
