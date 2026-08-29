@@ -59,9 +59,7 @@ export default function SyncCache() {
                 isOnline ? "bg-emerald-50 text-emerald-600" : "bg-amber-50 text-amber-600"
               }`}
             >
-              <span className={`h-2 w-2 rounded-full ${isOnline ? "bg-emerald-500" : "bg-amber-500"}`} />
-              {isOnline ? "متصل" : "غير متصل"}
-            </span>
+              
             {pendingCount > 0 && (
               <span className="text-xs font-black text-gray-400">{pendingCount} عنصر بانتظار المزامنة</span>
             )}
