@@ -59,7 +59,8 @@ export default function SyncCache() {
                 isOnline ? "bg-emerald-50 text-emerald-600" : "bg-amber-50 text-amber-600"
               }`}
             >
-              
+              {isOnline ? "متصل" : "غير متصل"}
+            </span>
             {pendingCount > 0 && (
               <span className="text-xs font-black text-gray-400">{pendingCount} عنصر بانتظار المزامنة</span>
             )}
@@ -160,4 +161,4 @@ function CacheRow({
       {badge}
     </div>
   );
-      }
+}
