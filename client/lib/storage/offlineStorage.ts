@@ -131,14 +131,16 @@ class OfflineStorageService {
   async getPendingReports(): Promise<StoredReport[]> {
     if (!this.db) throw new Error('Database not initialized');
 
+    // Inclut 'failed' : un échec réseau ponctuel ne doit pas bloquer
+    // définitivement l'élément (sinon plus jamais de nouvelle tentative).
     return new Promise((resolve, reject) => {
       const tx = this.db!.transaction('reports', 'readonly');
-      const store = tx.objectStore('reports');
-      const index = store.index('syncStatus');
-      const request = index.getAll('pending');
+      const index = tx.objectStore('reports').index('syncStatus');
+      const pending = index.getAll('pending');
+      const failed = index.getAll('failed');
 
-      request.onerror = () => reject(request.error);
-      request.onsuccess = () => resolve(request.result);
+      tx.onerror = () => reject(tx.error);
+      tx.oncomplete = () => resolve([...pending.result, ...failed.result]);
     });
   }
 
@@ -153,6 +155,7 @@ class OfflineStorageService {
     report.lastSyncAttempt = new Date().toISOString();
     if (supabaseId) report.supabaseId = supabaseId;
     if (error) report.errorMessage = error;
+    if (status === 'synced') report.errorMessage = undefined;
 
     return new Promise((resolve, reject) => {
       const tx = this.db!.transaction('reports', 'readwrite');
@@ -234,14 +237,16 @@ class OfflineStorageService {
   async getPendingSessions(): Promise<StoredSession[]> {
     if (!this.db) throw new Error('Database not initialized');
 
+    // Inclut 'failed' : un échec réseau ponctuel ne doit pas bloquer
+    // définitivement l'élément (sinon plus jamais de nouvelle tentative).
     return new Promise((resolve, reject) => {
       const tx = this.db!.transaction('sessions', 'readonly');
-      const store = tx.objectStore('sessions');
-      const index = store.index('syncStatus');
-      const request = index.getAll('pending');
+      const index = tx.objectStore('sessions').index('syncStatus');
+      const pending = index.getAll('pending');
+      const failed = index.getAll('failed');
 
-      request.onerror = () => reject(request.error);
-      request.onsuccess = () => resolve(request.result);
+      tx.onerror = () => reject(tx.error);
+      tx.oncomplete = () => resolve([...pending.result, ...failed.result]);
     });
   }
 
@@ -256,6 +261,7 @@ class OfflineStorageService {
     session.lastSyncAttempt = new Date().toISOString();
     if (supabaseId) session.supabaseId = supabaseId;
     if (error) session.errorMessage = error;
+    if (status === 'synced') session.errorMessage = undefined;
 
     return new Promise((resolve, reject) => {
       const tx = this.db!.transaction('sessions', 'readwrite');
