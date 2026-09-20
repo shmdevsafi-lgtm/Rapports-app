@@ -39,7 +39,7 @@ jobs:
           distribution: 'temurin'
 
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v2
+        uses: android-actions/setup-android@v3
 
       - name: Setup Capacitor (dev deps)
         run: pnpm add -D @capacitor/core @capacitor/cli @capacitor/android
