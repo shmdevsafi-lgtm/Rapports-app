@@ -18,6 +18,11 @@ import { offlineStorage, StoredReport, StoredSession } from '../storage/offlineS
 // avec .message/.details/.hint) ou d'une Error classique. String(err)
 // sur un objet donne littéralement "[object Object]" — à éviter.
 function describeError(error: unknown): string {
+  // fetch() rejette avec TypeError("Failed to fetch") quand le serveur est
+  // injoignable (pas de réseau réel, DNS, projet Supabase en pause...).
+  if (error instanceof TypeError && /failed to fetch|network/i.test(error.message)) {
+    return 'Serveur injoignable (réseau indisponible ou projet Supabase en pause). Nouvelle tentative automatique.';
+  }
   if (error instanceof Error) return error.message;
   if (error && typeof error === 'object') {
     const e = error as Record<string, unknown>;
