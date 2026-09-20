@@ -15,11 +15,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # pnpm doit Ãªtre installÃ© AVANT setup-node (car cache: 'pnpm' en dÃ©pend)
+      # pnpm doit Ãªtre installÃ© AVANT setup-node (car cache: 'pnpm' en dÃ©pend).
+      # Pas de "version:" ici : la v4 la lit dans "packageManager" du package.json
+      # (pnpm@10.14.0). Indiquer les deux provoque une erreur.
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 10.14.0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
